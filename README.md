@@ -1,56 +1,165 @@
 # Comverse
 
-Commerce + Converse — WhatsApp & Instagram commerce platform built for Bharat.
+**Commerce + Converse** — WhatsApp conversational commerce for Indian SMBs.
 
-## Overview
+Enables catalog-based food businesses (cake shops, cafes, thali restaurants) to take orders directly on WhatsApp at **10% commission** vs 25–35% on Zomato/Swiggy. A Hinglish AI agent handles the full ordering journey — no new app needed for customers.
 
-Comverse enables Indian SMBs (starting with catalog-based food businesses) to reduce platform dependency on Zomato/Swiggy by offering conversational commerce at 10% commission (vs 25-35% on aggregators), while solving payment collection and delivery.
+---
 
-**Founder:** Amit Chavan (amit.chavan90@gmail.com)
+## How It Works
 
-## Core Value Propositions
+```
+Customer (WhatsApp)
+        │
+        ▼
+WhatsApp Cloud API ──► Comverse Service (FastAPI) ──► Lyzr Agent (Claude Sonnet)
+                                │
+                                ▼
+                        Supabase (orders, catalog)
+```
 
-1. **Storefront on WhatsApp & Instagram** — no new app needed
-2. **10% commission** vs 25-35% on aggregators
-3. **Payment integration** — Razorpay UPI with T+1 settlements
-4. **Last-mile delivery** — Shiprocket Quick, Shadowfax, Borzo
-5. **Customer data ownership** — know who orders, preferences, frequency
-6. **Hinglish AI agent** — handles full customer ordering journey
-7. **Discovery tools** — QR codes, CTWA campaigns, Google My Business
+---
 
-## Target Market
+## Repo Structure
 
-- **Vertical:** Catalog-based food SMBs (cake shops, cafes, thali restaurants)
-- **Phase 1:** Pune & suburbs
-- **Phase 2:** Mumbai & Ahmedabad
-- **ICP:** 50+ daily orders, 30-500 SKUs, currently on Zomato/Swiggy
+```
+comverse/
+├── service/        # FastAPI backend (webhook handler + Lyzr caller)
+├── demo/           # Streamlit demo UI (simulates WhatsApp chat)
+└── docs/           # OpenAPI specs, plans
+```
 
-## Architecture
+---
 
-No frontend — WhatsApp IS the interface.
+## Quick Start
 
-| Component | Technology |
-|-----------|-----------|
-| Messaging | WhatsApp Cloud API (direct, no BSP) |
-| AI Agent | Lyzr Agent Studio (Claude Sonnet 4.5) |
-| Middleware | AWS Lambda |
-| Database | Supabase (shared) |
-| Catalog Sync | PetPooja → Comverse DB → Meta Commerce Catalog |
-| Payments | Razorpay Route (Linked Accounts) |
-| Delivery | Shiprocket Quick / Shadowfax / Borzo |
-| Discovery | Google My Business API |
+### Prerequisites
 
-## Current Status
+- Python 3.10+
+- A [Lyzr Studio](https://studio.lyzr.ai) account and API key
 
-**Stage:** Idea → MVP
+---
 
-**Next step:** Founder sharing synthetic conversation samples (input/output JSON) to design and build the Lyzr agents that power the WhatsApp ordering flow.
+### 1. Backend service
 
-## Timeline
+```bash
+cd service
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-| Phase | Period | Target |
-|-------|--------|--------|
-| Build & Launch | Month 1 | 5-7 pilot merchants |
-| Scale | Month 2 | 10-13 paying merchants |
-| Prove | Month 3 | 20-25 merchants, path to $10K MRR |
-| Scale to 100 | Months 4-6 | 100 merchants, Mumbai + Ahmedabad |
+The backend starts fine with **no `.env`** — you can provide your Lyzr key via the demo UI instead. Optionally pre-configure via environment:
+
+```bash
+cp .env.example .env
+# Edit .env and set LYZR_API_KEY=your-key-here
+```
+
+Start the server:
+
+```bash
+make dev
+# or: uvicorn main:app --reload --port 8000
+```
+
+API runs at `http://localhost:8000`. Health check: `GET /health`
+
+---
+
+### 2. Demo UI
+
+```bash
+cd demo
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Opens at `http://localhost:8501`.
+
+**First time:** click **⚙️ Settings** in the sidebar, paste your Lyzr API key, and hit Save. The backend will create a Lyzr agent on the first message and reuse it for the session.
+
+---
+
+## API
+
+### `POST /chat`
+
+Send a message and get an AI reply.
+
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -H "X-Lyzr-Api-Key: your-lyzr-key" \
+  -d '{
+    "merchant_id": "merchant_001",
+    "sender": "+919876543210",
+    "message": "What cakes do you have?"
+  }'
+```
+
+**Headers**
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `X-Lyzr-Api-Key` | Yes* | Lyzr API key. Not required if `LYZR_API_KEY` is set in env. |
+| `X-Lyzr-Agent-Id` | No | Reuse an existing Lyzr agent ID. Leave blank to auto-create. |
+
+**Response**
+
+```json
+{
+  "session_id": "merchant_001:+919876543210",
+  "reply": "Namaste! Humare paas Chocolate Cake (₹500), Vanilla Cake (₹400)..."
+}
+```
+
+---
+
+## Development
+
+```bash
+cd service
+
+# Run tests
+make test
+
+# Lint
+make lint
+
+# Format
+make fmt
+```
+
+---
+
+## Mock Merchants
+
+Two merchants are pre-loaded for demo/testing:
+
+| ID | Name | Catalog |
+|----|------|---------|
+| `merchant_001` | Amit's Cake Shop | Chocolate, Vanilla, Red Velvet cakes |
+| `merchant_002` | Priya's Thali House | Veg & Non-veg thali |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| AI Agent | [Lyzr Agent Studio](https://studio.lyzr.ai) (Claude Sonnet 4.5) |
+| Backend | FastAPI + Uvicorn |
+| Demo UI | Streamlit |
+| Database (planned) | Supabase Postgres |
+| Payments (planned) | Razorpay Route |
+| Messaging (planned) | WhatsApp Cloud API |
+
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LYZR_API_KEY` | `""` | Lyzr API key. Can be passed per-request via header instead. |
+| `COMVERSE_AGENT_ID` | `""` | Existing Lyzr agent ID. Leave blank to auto-create on first use. |
