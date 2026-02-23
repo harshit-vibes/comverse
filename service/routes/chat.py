@@ -15,25 +15,31 @@ def get_agent(
     """Resolve the Lyzr agent for this request.
 
     Priority:
-    1. X-Lyzr-Api-Key header  — creates/caches an agent for that key
-    2. app.state.agent         — pre-warmed at startup via env config
-    3. 503                     — no key available anywhere
+    1. X-Lyzr-Api-Key + X-Lyzr-Agent-Id headers — fetches and caches that agent
+    2. app.state.agent                            — pre-warmed at startup via env config
+    3. 4xx                                        — missing credentials
     """
     if x_lyzr_api_key:
-        cache = req.app.state.agents_cache
-        if x_lyzr_api_key not in cache:
-            cache[x_lyzr_api_key] = init_lyzr(
-                api_key=x_lyzr_api_key,
-                agent_id=x_lyzr_agent_id or "",
+        if not x_lyzr_agent_id:
+            raise HTTPException(
+                status_code=400,
+                detail="X-Lyzr-Agent-Id header is required.",
             )
-        return cache[x_lyzr_api_key]
+        cache = req.app.state.agents_cache
+        cache_key = f"{x_lyzr_api_key}:{x_lyzr_agent_id}"
+        if cache_key not in cache:
+            cache[cache_key] = init_lyzr(
+                api_key=x_lyzr_api_key,
+                agent_id=x_lyzr_agent_id,
+            )
+        return cache[cache_key]
 
     if hasattr(req.app.state, "agent"):
         return req.app.state.agent
 
     raise HTTPException(
         status_code=503,
-        detail="Lyzr API key not configured. Provide the X-Lyzr-Api-Key header.",
+        detail="Lyzr credentials not configured. Provide X-Lyzr-Api-Key and X-Lyzr-Agent-Id headers.",
     )
 
 
